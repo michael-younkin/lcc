@@ -1,0 +1,6 @@
+[package]
+name = "lcc"
+version = "0.1.0"
+authors = ["Michael Younkin <younkin.michael@gmail.com>"]
+
+[dependencies]
