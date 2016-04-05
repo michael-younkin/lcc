@@ -39,7 +39,7 @@ impl<'a> Token<'a> {
 // Func -> Parens | λ variable . App
 // Parens -> ( App )
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum LambdaExp<'a> {
     App(Box<LambdaExp<'a>>, Box<LambdaExp<'a>>),
     Func(Box<LambdaExp<'a>>, Box<LambdaExp<'a>>),
@@ -134,6 +134,45 @@ fn parse_parens<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
     out
 }
 
+fn substitute<'a>(root_exp: LambdaExp<'a>, var: &LambdaExp<'a>, val: &LambdaExp<'a>) ->
+        LambdaExp<'a> {
+    match root_exp {
+        LambdaExp::App(left, right) => LambdaExp::App(
+                Box::new(substitute(*left, var, val)),
+                Box::new(substitute(*right, var, val))
+                ),
+        LambdaExp::Var(_) =>
+            if root_exp == *var {
+                val.to_owned()
+            } else {
+                root_exp
+            },
+        LambdaExp::Func(arg, body) =>
+            if *arg == *var {
+                LambdaExp::Func(arg, body)
+            } else {
+                LambdaExp::Func(arg, Box::new(substitute(*body, var, val)))
+            },
+        LambdaExp::None => LambdaExp::None
+    }
+}
+
+fn simplify<'a>(root_exp: LambdaExp<'a>) -> LambdaExp<'a> {
+    match root_exp {
+        LambdaExp::App(left, right) => {
+            let left = simplify(*left);
+            let right = simplify(*right);
+            if let LambdaExp::Func(arg, body) = left {
+                simplify(substitute(*body, &arg, &right))
+            } else {
+                LambdaExp::App(Box::new(left), Box::new(right))
+            }
+        },
+        LambdaExp::Func(arg, body) => LambdaExp::Func(arg, Box::new(simplify(*body))),
+        _ => root_exp
+    }
+}
+
 fn main() {
     let mut buf = String::new();
     io::stdin().read_to_string(&mut buf).unwrap();
@@ -154,4 +193,5 @@ fn main() {
     });
     let lambda_exp = parse_app(&mut tokens.peekable());
     println!("{}", lambda_exp);
+    println!("{}", simplify(lambda_exp));
 }
