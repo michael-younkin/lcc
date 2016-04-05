@@ -34,7 +34,7 @@ impl<'a> Token<'a> {
     }
 }
 
-// App -> Var App | e
+// App -> App Var | e
 // Var -> Func | variable
 // Func -> Parens | λ variable . App
 // Parens -> ( App )
@@ -44,19 +44,13 @@ enum LambdaExp<'a> {
     App(Box<LambdaExp<'a>>, Box<LambdaExp<'a>>),
     Func(Box<LambdaExp<'a>>, Box<LambdaExp<'a>>),
     Var(&'a str),
-    None
+    None,
 }
 
 impl<'a> Display for LambdaExp<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            &LambdaExp::App(ref left, ref right) => {
-                if **right == LambdaExp::None {
-                    write!(f, "{}", left)
-                } else {
-                    write!(f, "{} {}", left, right)
-                }
-            },
+            &LambdaExp::App(ref left, ref right) => write!(f, "{} {}", left, right),
             &LambdaExp::Func(ref arg, ref body) => write!(f, "(λ{}.{})", arg, body),
             &LambdaExp::Var(s) => write!(f, "{}", s),
             &LambdaExp::None => write!(f, ""),
@@ -89,21 +83,19 @@ fn try_consume<'a, T>(tokens: &mut Peekable<T>, expected: TokenKind) -> bool
 fn parse_app<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
         where T: Iterator<Item=Token<'a>> {
     println!("parse_app: {:?}", tokens.peek());
-    if let Some(&Token {kind, value: _}) = tokens.peek() {
-        match kind {
-            TokenKind::LParen | TokenKind::FuncDecStart | TokenKind::Variable => {
-                let left = parse_var(tokens);
-                let right = parse_app(tokens);
-                return LambdaExp::App(Box::new(left), Box::new(right))
-            },
-            _ => ()
-        }
+    let mut current_value = parse_var(tokens);
+    let mut next_value = parse_var(tokens);
+    while next_value != LambdaExp::None {
+        current_value = LambdaExp::App(Box::new(current_value), Box::new(next_value));
+        next_value = parse_var(tokens);
     }
-    LambdaExp::None
+    current_value
 }
 
 fn parse_var<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
         where T: Iterator<Item=Token<'a>> {
+    // Moved here from parse_app because parse_app is weird in order to handle left associativity
+    // properly.
     println!("parse_var: {:?}", tokens.peek());
     if let Some(s) = try_consume_value(tokens, TokenKind::Variable) {
         LambdaExp::Var(s)
@@ -130,9 +122,12 @@ fn parse_parens<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
         where T: Iterator<Item=Token<'a>> {
     println!("parse_parens: {:?}", tokens.peek());
     if !try_consume(tokens, TokenKind::LParen) {
-        panic!("Expected left parenthese.");
+        return LambdaExp::None;
     }
     let out = parse_app(tokens);
+    if out == LambdaExp::None {
+        panic!("No empty parentheses allowed.");
+    }
     if !try_consume(tokens, TokenKind::RParen) {
         panic!("Expected right parenthese.");
     }
