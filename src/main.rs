@@ -224,5 +224,9 @@ fn main() {
     });
     let lambda_exp = Rc::new(parse_app(&mut tokens.peekable()));
     println!("Parsed expression: {}", lambda_exp);
-    println!("Simplified expression: {}", simplify(lambda_exp).last().expect("There should be at least one step in simplification."));
+    println!("Simplification steps:");
+    let steps = simplify(lambda_exp);
+    for (i, step) in steps.iter().enumerate() {
+        println!("Step {}: {}", i + 1, step);
+    }
 }
