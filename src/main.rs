@@ -2,6 +2,7 @@ use std::io::{self, Read};
 use std::iter::Peekable;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TokenKind {
@@ -41,8 +42,8 @@ impl<'a> Token<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum LambdaExp<'a> {
-    App(Box<LambdaExp<'a>>, Box<LambdaExp<'a>>),
-    Func(Box<LambdaExp<'a>>, Box<LambdaExp<'a>>),
+    App(Rc<LambdaExp<'a>>, Rc<LambdaExp<'a>>),
+    Func(Rc<LambdaExp<'a>>, Rc<LambdaExp<'a>>),
     Var(&'a str),
     None,
 }
@@ -95,7 +96,7 @@ fn parse_app<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
     let mut current_value = parse_var(tokens);
     let mut next_value = parse_var(tokens);
     while next_value != LambdaExp::None {
-        current_value = LambdaExp::App(Box::new(current_value), Box::new(next_value));
+        current_value = LambdaExp::App(Rc::new(current_value), Rc::new(next_value));
         next_value = parse_var(tokens);
     }
     current_value
@@ -122,7 +123,7 @@ fn parse_func<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
         panic!("Expected function argument list ending.");
     }
     let func_body = parse_app(tokens);
-    LambdaExp::Func(Box::new(LambdaExp::Var(variable)), Box::new(func_body))
+    LambdaExp::Func(Rc::new(LambdaExp::Var(variable)), Rc::new(func_body))
 }
 
 fn parse_parens<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
@@ -140,43 +141,67 @@ fn parse_parens<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
     out
 }
 
-fn substitute<'a>(root_exp: LambdaExp<'a>, var: &LambdaExp<'a>, val: &LambdaExp<'a>) ->
-        LambdaExp<'a> {
-    match root_exp {
-        LambdaExp::App(left, right) => LambdaExp::App(
-                Box::new(substitute(*left, var, val)),
-                Box::new(substitute(*right, var, val))
-                ),
-        LambdaExp::Var(_) =>
-            if root_exp == *var {
-                val.to_owned()
-            } else {
-                root_exp
-            },
-        LambdaExp::Func(arg, body) =>
-            if *arg == *var {
-                LambdaExp::Func(arg, body)
-            } else {
-                LambdaExp::Func(arg, Box::new(substitute(*body, var, val)))
-            },
-        LambdaExp::None => LambdaExp::None
+fn substitute<'a>(root_exp: Rc<LambdaExp<'a>>, var: Rc<LambdaExp<'a>>, val: Rc<LambdaExp<'a>>) ->
+        Rc<LambdaExp<'a>> {
+    match *root_exp {
+        LambdaExp::App(ref left, ref right) => Rc::new(LambdaExp::App(
+                substitute(left.to_owned(), var.to_owned(), val.to_owned()),
+                substitute(right.to_owned(), var.to_owned(), val.to_owned())
+            )),
+        LambdaExp::Var(_) if *root_exp == *var => val.to_owned(),
+        LambdaExp::Func(ref arg, ref body) if *arg != var =>
+            Rc::new(LambdaExp::Func(
+                    arg.to_owned(),
+                    substitute(body.to_owned(), var.to_owned(), val.to_owned()))),
+        _ => root_exp.to_owned(),
     }
 }
 
-fn simplify<'a>(root_exp: LambdaExp<'a>) -> LambdaExp<'a> {
-    match root_exp {
-        LambdaExp::App(left, right) => {
-            let left = simplify(*left);
-            let right = simplify(*right);
-            if let LambdaExp::Func(arg, body) = left {
-                simplify(substitute(*body, &arg, &right))
+fn simplify_once<'a>(root_exp: Rc<LambdaExp<'a>>) -> Rc<LambdaExp<'a>> {
+    match *root_exp {
+        LambdaExp::App(ref left, ref right) => {
+            // If we have a func, apply it
+            if let LambdaExp::Func(ref arg, ref body) = **left {
+                substitute(body.to_owned(), arg.to_owned(), right.to_owned())
             } else {
-                LambdaExp::App(Box::new(left), Box::new(right))
+                // Try to simplify the right
+                let simple_right = simplify_once(right.to_owned());
+                if simple_right != *right {
+                    Rc::new(LambdaExp::App(left.to_owned(), simple_right))
+                } else {
+                    // Try to simplify the left
+                    let simple_left = simplify_once(left.to_owned());
+                    if simple_left != *left {
+                        Rc::new(LambdaExp::App(simple_left, right.to_owned()))
+                    } else {
+                        // Can't simplify either side
+                        root_exp.to_owned()
+                    }
+                }
             }
         },
-        LambdaExp::Func(arg, body) => LambdaExp::Func(arg, Box::new(simplify(*body))),
-        _ => root_exp
+        LambdaExp::Func(ref arg, ref body) => {
+            let simple_body = simplify_once(body.to_owned());
+            if simple_body != *body {
+                Rc::new(LambdaExp::Func(arg.to_owned(), simple_body))
+            } else {
+                root_exp.to_owned()
+            }
+        },
+        _ => root_exp.to_owned(),
     }
+}
+
+fn simplify<'a>(root_exp: Rc<LambdaExp<'a>>) -> Vec<Rc<LambdaExp<'a>>> {
+    let mut steps = vec![root_exp.clone()];
+    let mut prev_step = root_exp.clone();
+    let mut next_step = simplify_once(root_exp);
+    while next_step != prev_step {
+        prev_step = next_step;
+        steps.push(prev_step.clone());
+        next_step = simplify_once(prev_step.clone());
+    }
+    steps
 }
 
 fn main() {
@@ -197,7 +222,7 @@ fn main() {
             _ => panic!("Unexpected token!"),
         }
     });
-    let lambda_exp = parse_app(&mut tokens.peekable());
+    let lambda_exp = Rc::new(parse_app(&mut tokens.peekable()));
     println!("Parsed expression: {}", lambda_exp);
-    println!("Simplified expression: {}", simplify(lambda_exp));
+    println!("Simplified expression: {}", simplify(lambda_exp).last().expect("There should be at least one step in simplification."));
 }
