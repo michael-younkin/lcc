@@ -49,11 +49,21 @@ enum LambdaExp<'a> {
 
 impl<'a> Display for LambdaExp<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            &LambdaExp::App(ref left, ref right) => write!(f, "{} {}", left, right),
-            &LambdaExp::Func(ref arg, ref body) => write!(f, "(λ{}.{})", arg, body),
-            &LambdaExp::Var(s) => write!(f, "{}", s),
-            &LambdaExp::None => write!(f, ""),
+        match *self {
+            LambdaExp::App(ref left, ref right) =>
+                // ** needed until we finally get something like the "box" keyword to use in
+                // pattern matching.
+                match (&**left, &**right) {
+                    // When functions are forced to be left associative
+                    (&LambdaExp::Func(_, _), &LambdaExp::Func(_, _)) =>
+                        write!(f, "({}) {}", left, right),
+                    // When application is forced to be right associative
+                    (_, &LambdaExp::App(_, _)) => write!(f, "{} ({})", left, right),
+                    _ => write!(f, "{} {}", left, right),
+                },
+            LambdaExp::Func(ref arg, ref body) => write!(f, "λ{}.{}", arg, body),
+            LambdaExp::Var(s) => write!(f, "{}", s),
+            LambdaExp::None => write!(f, ""),
         }
     }
 }
