@@ -198,6 +198,6 @@ fn main() {
         }
     });
     let lambda_exp = parse_app(&mut tokens.peekable());
-    println!("{}", lambda_exp);
-    println!("{}", simplify(lambda_exp));
+    println!("Parsed expression: {}", lambda_exp);
+    println!("Simplified expression: {}", simplify(lambda_exp));
 }
