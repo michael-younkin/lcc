@@ -1,5 +1,4 @@
 use std::io::{self, Read};
-use std::iter::Peekable;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
@@ -32,6 +31,74 @@ impl<'a> Token<'a> {
             value: Some(value),
             kind: kind,
         }
+    }
+}
+
+type LambdaParseResult<T> = Result<T, &'static str>;
+
+struct TokenStream<'a, I> where I: Iterator<Item=Token<'a>> {
+    tokens: I,
+    next: Option<Token<'a>>
+}
+
+impl<'a, I> TokenStream<'a, I> where I: Iterator<Item=Token<'a>> {
+    fn new(mut tokens: I) -> TokenStream<'a, I> {
+        let next = tokens.next();
+        TokenStream {
+            tokens: tokens,
+            next: next
+        }
+    }
+
+    fn get_token_kind_error(kind: TokenKind) -> &'static str {
+        match kind {
+            TokenKind::Variable => "Unable to match variable.",
+            TokenKind::FuncDecStart => "Unable to match function declaration start.",
+            TokenKind::FuncDecEnd => "Unable to match function declaration end.",
+            TokenKind::LParen => "Unable to match left parenthese.",
+            TokenKind::RParen => "Unable to match right parenthese."
+        }
+    }
+
+    fn try_consume(&mut self, target_kind: TokenKind) -> bool {
+        match self.next {
+            Some(Token {kind, value: _}) if kind == target_kind => {
+                self.next = self.tokens.next();
+                true
+            },
+            _ => false
+        }
+    }
+
+    fn consume(&mut self, kind: TokenKind) -> LambdaParseResult<()> {
+        if self.try_consume(kind) {
+            Ok(())
+        } else {
+            Err(TokenStream::<'a, I>::get_token_kind_error(kind))
+        }
+    }
+
+    fn try_consume_value(&mut self, target_kind: TokenKind) -> Option<&'a str> {
+        match self.next {
+            Some(Token {kind, value: v}) if kind == target_kind => {
+                self.next = self.tokens.next();
+                Some(v.expect(
+                    &format!("Expected token of kind {:?}) to have a value.", target_kind)
+                    ))
+            },
+            _ => None
+        }
+    }
+
+    fn consume_value(&mut self, target_kind: TokenKind) -> LambdaParseResult<&'a str> {
+        match self.try_consume_value(target_kind) {
+            Some(v) => Ok(v),
+            _ => Err(TokenStream::<'a, I>::get_token_kind_error(target_kind))
+        }
+    }
+
+    fn has_next(&self) -> bool {
+        self.next.is_some()
     }
 }
 
@@ -69,76 +136,50 @@ impl<'a> Display for LambdaExp<'a> {
     }
 }
 
-fn try_consume_value<'a, T>(tokens: &mut Peekable<T>, expected: TokenKind) -> Option<&'a str>
-        where T: Iterator<Item=Token<'a>> {
-    match tokens.peek() {
-        Some(&Token {kind, value}) if kind == expected => {
-            tokens.next();
-            Some(value.expect("Token should have a value."))
-        },
-        _ => None
-    }
-}
-
-fn try_consume<'a, T>(tokens: &mut Peekable<T>, expected: TokenKind) -> bool
-        where T: Iterator<Item=Token<'a>> {
-    match tokens.peek() {
-        Some(&Token {kind, value: _}) if kind == expected => {
-            tokens.next();
-            true
-        },
-        _ => false
-    }
-}
-
-fn parse_app<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
-        where T: Iterator<Item=Token<'a>> {
-    let mut current_value = parse_var(tokens);
-    let mut next_value = parse_var(tokens);
+fn parse_app<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
+        where I: Iterator<Item=Token<'a>> {
+    let mut current_value = try!(parse_var(tokens));
+    let mut next_value = try!(parse_var(tokens));
     while next_value != LambdaExp::None {
         current_value = LambdaExp::App(Rc::new(current_value), Rc::new(next_value));
-        next_value = parse_var(tokens);
+        next_value = try!(parse_var(tokens));
     }
-    current_value
+    Ok(current_value)
 }
 
-fn parse_var<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
-        where T: Iterator<Item=Token<'a>> {
-    // Moved here from parse_app because parse_app is weird in order to handle left associativity
-    // properly.
-    if let Some(s) = try_consume_value(tokens, TokenKind::Variable) {
-        LambdaExp::Var(s)
+fn parse_var<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
+        where I: Iterator<Item=Token<'a>> {
+    if let Some(v) = tokens.try_consume_value(TokenKind::Variable) {
+        Ok(LambdaExp::Var(v))
     } else {
         parse_func(tokens)
     }
 }
 
-fn parse_func<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
-        where T: Iterator<Item=Token<'a>> {
-    if !try_consume(tokens, TokenKind::FuncDecStart) {
-        return parse_parens(tokens);
+fn parse_func<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
+        where I: Iterator<Item=Token<'a>> {
+    if tokens.try_consume(TokenKind::FuncDecStart) {
+        let arg = LambdaExp::Var(try!(tokens.consume_value(TokenKind::Variable)));
+        try!(tokens.consume(TokenKind::FuncDecEnd));
+        let func_body = try!(parse_app(tokens));
+        Ok(LambdaExp::Func(Rc::new(arg), Rc::new(func_body)))
+    } else {
+        parse_parens(tokens)
     }
-    let variable = try_consume_value(tokens, TokenKind::Variable).expect("Expected variable token.");
-    if !try_consume(tokens, TokenKind::FuncDecEnd) {
-        panic!("Expected function argument list ending.");
-    }
-    let func_body = parse_app(tokens);
-    LambdaExp::Func(Rc::new(LambdaExp::Var(variable)), Rc::new(func_body))
 }
 
-fn parse_parens<'a, T>(tokens: &mut Peekable<T>) -> LambdaExp<'a>
-        where T: Iterator<Item=Token<'a>> {
-    if !try_consume(tokens, TokenKind::LParen) {
-        return LambdaExp::None;
+fn parse_parens<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
+        where I: Iterator<Item=Token<'a>> {
+    if tokens.try_consume(TokenKind::LParen) {
+        let contents = try!(parse_app(tokens));
+        if contents == LambdaExp::None {
+            return Err("Expected an expression inside parentheses.")
+        }
+        try!(tokens.consume(TokenKind::RParen));
+        Ok(contents)
+    } else {
+        Ok(LambdaExp::None)
     }
-    let out = parse_app(tokens);
-    if out == LambdaExp::None {
-        panic!("No empty parentheses allowed.");
-    }
-    if !try_consume(tokens, TokenKind::RParen) {
-        panic!("Expected right parenthese.");
-    }
-    out
 }
 
 fn substitute<'a>(root_exp: Rc<LambdaExp<'a>>, var: Rc<LambdaExp<'a>>, val: Rc<LambdaExp<'a>>) ->
@@ -208,7 +249,7 @@ fn main() {
     let mut buf = String::new();
     io::stdin().read_to_string(&mut buf).unwrap();
 
-    let mut tokens = buf.split("").filter_map(|c| {
+    let mut tokens = TokenStream::new(buf.split("").filter_map(|c| {
         match c {
             // split("") produces a "" at the start and end of the iterator
             "" | " " | "\n" | "\t" => None,
@@ -221,9 +262,9 @@ fn main() {
             ")" => Some(Token::new(TokenKind::RParen)),
             _ => panic!("Unexpected token!"),
         }
-    }).peekable();
-    let lambda_exp = Rc::new(parse_app(&mut tokens));
-    if !tokens.peek().is_none() {
+    }));
+    let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
+    if tokens.has_next() {
         panic!("Extra tokens.");
     }
 
