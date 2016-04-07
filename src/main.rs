@@ -208,7 +208,7 @@ fn main() {
     let mut buf = String::new();
     io::stdin().read_to_string(&mut buf).unwrap();
 
-    let tokens = buf.split("").filter_map(|c| {
+    let mut tokens = buf.split("").filter_map(|c| {
         match c {
             // split("") produces a "" at the start and end of the iterator
             "" | " " | "\n" | "\t" => None,
@@ -221,8 +221,12 @@ fn main() {
             ")" => Some(Token::new(TokenKind::RParen)),
             _ => panic!("Unexpected token!"),
         }
-    });
-    let lambda_exp = Rc::new(parse_app(&mut tokens.peekable()));
+    }).peekable();
+    let lambda_exp = Rc::new(parse_app(&mut tokens));
+    if !tokens.peek().is_none() {
+        panic!("Extra tokens.");
+    }
+
     println!("Parsed expression: {}", lambda_exp);
     println!("Simplification steps:");
     let steps = simplify(lambda_exp);
