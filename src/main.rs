@@ -36,16 +36,30 @@ impl<'a> Token<'a> {
 
 type LambdaParseResult<T> = Result<T, &'static str>;
 
-struct TokenStream<'a, I> where I: Iterator<Item=Token<'a>> {
-    tokens: I,
+struct TokenStream<'a> {
+    tokens: Box<Iterator<Item=Token<'a>> + 'a>,
     next: Option<Token<'a>>
 }
 
-impl<'a, I> TokenStream<'a, I> where I: Iterator<Item=Token<'a>> {
-    fn new(mut tokens: I) -> TokenStream<'a, I> {
+impl<'a> TokenStream<'a> {
+    fn new(s: &'a str) -> TokenStream<'a> {
+        let mut tokens = s.split("").filter_map(|c| {
+            match c {
+                // split("") produces a "" at the start and end of the iterator
+                "" | " " | "\n" | "\t" => None,
+                "/" => Some(Token::new(TokenKind::FuncDecStart)),
+                "." => Some(Token::new(TokenKind::FuncDecEnd)),
+                "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
+                    "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+                    => Some(Token::with_value(TokenKind::Variable, c)),
+                "(" => Some(Token::new(TokenKind::LParen)),
+                ")" => Some(Token::new(TokenKind::RParen)),
+                _ => panic!("Unexpected token!"),
+            }
+        });
         let next = tokens.next();
         TokenStream {
-            tokens: tokens,
+            tokens: Box::new(tokens),
             next: next
         }
     }
@@ -74,7 +88,7 @@ impl<'a, I> TokenStream<'a, I> where I: Iterator<Item=Token<'a>> {
         if self.try_consume(kind) {
             Ok(())
         } else {
-            Err(TokenStream::<'a, I>::get_token_kind_error(kind))
+            Err(TokenStream::<'a>::get_token_kind_error(kind))
         }
     }
 
@@ -93,7 +107,7 @@ impl<'a, I> TokenStream<'a, I> where I: Iterator<Item=Token<'a>> {
     fn consume_value(&mut self, target_kind: TokenKind) -> LambdaParseResult<&'a str> {
         match self.try_consume_value(target_kind) {
             Some(v) => Ok(v),
-            _ => Err(TokenStream::<'a, I>::get_token_kind_error(target_kind))
+            _ => Err(TokenStream::<'a>::get_token_kind_error(target_kind))
         }
     }
 
@@ -140,8 +154,7 @@ impl<'a> Display for LambdaExp<'a> {
     }
 }
 
-fn parse_app<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
-        where I: Iterator<Item=Token<'a>> {
+fn parse_app<'a>(tokens: &mut TokenStream<'a>) -> LambdaParseResult<LambdaExp<'a>> {
     let mut current_value = try!(parse_var(tokens));
     let mut next_value = try!(parse_var(tokens));
     while next_value != LambdaExp::None {
@@ -151,8 +164,7 @@ fn parse_app<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<Lambda
     Ok(current_value)
 }
 
-fn parse_var<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
-        where I: Iterator<Item=Token<'a>> {
+fn parse_var<'a>(tokens: &mut TokenStream<'a>) -> LambdaParseResult<LambdaExp<'a>> {
     if let Some(v) = tokens.try_consume_value(TokenKind::Variable) {
         Ok(LambdaExp::Var(v))
     } else {
@@ -160,8 +172,7 @@ fn parse_var<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<Lambda
     }
 }
 
-fn parse_func<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
-        where I: Iterator<Item=Token<'a>> {
+fn parse_func<'a>(tokens: &mut TokenStream<'a>) -> LambdaParseResult<LambdaExp<'a>> {
     if tokens.try_consume(TokenKind::FuncDecStart) {
         let arg = LambdaExp::Var(try!(tokens.consume_value(TokenKind::Variable)));
         try!(tokens.consume(TokenKind::FuncDecEnd));
@@ -172,8 +183,7 @@ fn parse_func<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<Lambd
     }
 }
 
-fn parse_parens<'a, I>(tokens: &mut TokenStream<'a, I>) -> LambdaParseResult<LambdaExp<'a>>
-        where I: Iterator<Item=Token<'a>> {
+fn parse_parens<'a>(tokens: &mut TokenStream<'a>) -> LambdaParseResult<LambdaExp<'a>> {
     if tokens.try_consume(TokenKind::LParen) {
         let contents = try!(parse_app(tokens));
         if contents == LambdaExp::None {
@@ -253,20 +263,7 @@ fn main() {
     let mut buf = String::new();
     io::stdin().read_to_string(&mut buf).unwrap();
 
-    let mut tokens = TokenStream::new(buf.split("").filter_map(|c| {
-        match c {
-            // split("") produces a "" at the start and end of the iterator
-            "" | " " | "\n" | "\t" => None,
-            "/" => Some(Token::new(TokenKind::FuncDecStart)),
-            "." => Some(Token::new(TokenKind::FuncDecEnd)),
-            "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o"
-                | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
-                => Some(Token::with_value(TokenKind::Variable, c)),
-            "(" => Some(Token::new(TokenKind::LParen)),
-            ")" => Some(Token::new(TokenKind::RParen)),
-            _ => panic!("Unexpected token!"),
-        }
-    }));
+    let mut tokens = TokenStream::new(&buf);
     let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
     if tokens.has_next() {
         panic!("Extra tokens.");
