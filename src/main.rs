@@ -124,6 +124,10 @@ impl<'a> Display for LambdaExp<'a> {
                 match (&**left, &**right) {
                     // When functions are forced to be left associative
                     (&LambdaExp::Func(_, _), &LambdaExp::Func(_, _)) =>
+                        write!(f, "({}) ({})", left, right),
+                    (&LambdaExp::App(_, _), &LambdaExp::Func(_, _)) =>
+                        write!(f, "{} ({})", left, right),
+                    (&LambdaExp::Func(_, _), _) =>
                         write!(f, "({}) {}", left, right),
                     // When application is forced to be right associative
                     (_, &LambdaExp::App(_, _)) => write!(f, "{} ({})", left, right),
