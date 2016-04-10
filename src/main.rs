@@ -129,6 +129,19 @@ enum LambdaExp<'a> {
     None,
 }
 
+impl<'a> LambdaExp<'a> {
+    fn parenthesize(&self) -> String {
+        match *self {
+            LambdaExp::App(ref left, ref right) =>
+                format!("({} {})", &left.parenthesize(), &right.parenthesize()),
+            LambdaExp::Func(ref left, ref right) =>
+                format!("(λ{}.{})", &left.parenthesize(), &right.parenthesize()),
+            LambdaExp::Var(ref name) => name.to_string(),
+            _ => "".to_owned(),
+        }
+    }
+}
+
 impl<'a> Display for LambdaExp<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
@@ -270,6 +283,7 @@ fn main() {
     }
 
     println!("Parsed expression: {}", lambda_exp);
+    println!("Parenthesized: {}", &lambda_exp.parenthesize());
     println!("Simplification steps:");
     let steps = simplify(lambda_exp);
     for (i, step) in steps.iter().enumerate() {
