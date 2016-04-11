@@ -232,20 +232,18 @@ fn simplify_once<'a>(root_exp: Rc<LambdaExp<'a>>) -> Rc<LambdaExp<'a>> {
             if let LambdaExp::Func(ref arg, ref body) = **left {
                 substitute(body.to_owned(), arg.to_owned(), right.to_owned())
             } else {
-                // Try to simplify the right
-                let simple_right = simplify_once(right.to_owned());
-                if simple_right != *right {
-                    Rc::new(LambdaExp::App(left.to_owned(), simple_right))
-                } else {
-                    // Try to simplify the left
-                    let simple_left = simplify_once(left.to_owned());
-                    if simple_left != *left {
-                        Rc::new(LambdaExp::App(simple_left, right.to_owned()))
+                fn try_simplify<'a>(exp: Rc<LambdaExp<'a>>) -> Option<Rc<LambdaExp<'a>>> {
+                    let simplified = simplify_once(exp.clone());
+                    if simplified == exp {
+                        None
                     } else {
-                        // Can't simplify either side
-                        root_exp.to_owned()
+                        Some(simplified)
                     }
                 }
+                // Try simplifying the left and the right and then give up
+                try_simplify(right.to_owned())
+                    .or_else(|| try_simplify(left.to_owned()))
+                    .unwrap_or_else(|| root_exp.to_owned())
             }
         },
         LambdaExp::Func(ref arg, ref body) => {
