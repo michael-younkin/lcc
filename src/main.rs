@@ -2,6 +2,10 @@ use std::io::{self, Read};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
+extern crate regex;
+use regex::Regex;
+#[macro_use]
+extern crate lazy_static;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TokenKind {
@@ -36,27 +40,148 @@ impl<'a> Token<'a> {
 
 type LambdaParseResult<T> = Result<T, &'static str>;
 
+enum WhileOut<'a, T> {
+    Iter(Box<Iterator<Item=T> + 'a>),
+    Some(T),
+    None,
+}
+type WhileFunc<'a, T> = FnMut() -> WhileOut<'a, T>;
+struct WhileIterator<'a, T> {
+    func: Box<WhileFunc<'a, T>>,
+    curr_iter: Option<Box<Iterator<Item=T> + 'a>>,
+    done: bool,
+}
+
+impl<'a, T> WhileIterator<'a, T> {
+    fn new(func: Box<WhileFunc<'a, T>>) -> WhileIterator<'a, T> {
+        WhileIterator {
+            func: func,
+            done: false,
+            curr_iter: None,
+        }
+    }
+}
+
+impl<'a, T> Iterator for WhileIterator<'a, T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        if self.done {
+            return None;
+        }
+        // See if we currently have an iterator
+        if let Some(iter) = self.curr_iter {
+            let next = iter.next();
+            if next.is_some() {
+                return next;
+            } else {
+                self.curr_iter = None;
+            }
+        }
+        // Otherwise see if our generator is returning stuff
+        match (*self.func)() {
+            WhileOut::Iter(iter) => {
+                self.curr_iter = Some(iter);
+                // Try again
+                self.next()
+            },
+            WhileOut::Some(v) => Some(v),
+            WhileOut::None => {
+                self.done = true;
+                None
+            }
+        }
+    }
+}
+
+lazy_static! {
+    static ref token_regex: Regex = {
+        let parts = [
+            ("variable", "[a-zA-Z]"),
+            ("number", "[1-9]*[0-9]"),
+            ("func_dec_start", "[/λ]"),
+            ("func_dec_end", "\\."),
+            ("l_paren", "\\("),
+            ("r_paren", "\\)"),
+        ];
+        let buf = String::from("^[\\s\n]*(?s)");
+        for part in parts.into_iter() {
+            buf.push_str(&format!("(?P<{}>{})|", part.0, part.1));
+        }
+        buf.pop();
+        buf.push_str("(?P<rest>.*)$");
+        Regex::new(&buf).unwrap()
+    };
+}
+
 struct TokenStream<'a> {
     tokens: Box<Iterator<Item=Token<'a>> + 'a>,
     next: Option<Token<'a>>
 }
 
+fn lambda_number<'a>(num: u32) -> WhileIterator<'a, Token<'static>> {
+    let count = -1;
+    let mut start = vec![
+        Token::new(TokenKind::LParen),
+        Token::new(TokenKind::FuncDecStart),
+        Token::with_value(TokenKind::Variable, "f"),
+        Token::new(TokenKind::FuncDecEnd),
+        Token::new(TokenKind::FuncDecStart),
+        Token::with_value(TokenKind::Variable, "x"),
+        Token::new(TokenKind::FuncDecEnd)];
+    WhileIterator::new(Box::new(|| {
+        // Return the preamble
+        if start.len() > 0 {
+            return WhileOut::Some(start.remove(0))
+        }
+        count += 1;
+        // Return f ( for each "1" in the number
+        if count < num {
+            WhileOut::Iter(Box::new(vec![
+                           Token::with_value(TokenKind::Variable, "f"),
+                           Token::new(TokenKind::LParen)].into_iter()))
+        // Return the inner x
+        } else if count == num {
+            WhileOut::Some(Token::with_value(TokenKind::Variable, "x"))
+        // Return ) for each "1" in the number, and an extra one to close out the function
+        } else if count > num && count <= num * 2 + 1 {
+            WhileOut::Some(Token::new(TokenKind::RParen))
+        } else {
+            WhileOut::None
+        }
+    }))
+}
+
 impl<'a> TokenStream<'a> {
     fn new(s: &'a str) -> TokenStream<'a> {
-        let mut tokens = s.split("").filter_map(|c| {
-            match c {
-                // split("") produces a "" at the start and end of the iterator
-                "" | " " | "\n" | "\t" => None,
-                "/" => Some(Token::new(TokenKind::FuncDecStart)),
-                "." => Some(Token::new(TokenKind::FuncDecEnd)),
-                "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
-                    "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
-                    => Some(Token::with_value(TokenKind::Variable, c)),
-                "(" => Some(Token::new(TokenKind::LParen)),
-                ")" => Some(Token::new(TokenKind::RParen)),
-                _ => panic!("Unexpected token!"),
+        let mut rem = s;
+        let mut tokens = WhileIterator::new(Box::new(move || {
+            if rem == "" {
+                return WhileOut::None;
             }
-        });
+            if let Some(captures) = token_regex.captures::<'a>(rem) {
+                if let Some(rest) = captures.name::<'a>("rest") {
+                    rem = rest;
+                }
+                for cap in captures.iter_named() {
+                    match cap {
+                        ("variable", Some(v)) =>
+                            return WhileOut::Some(Token::with_value(TokenKind::Variable, v)),
+                        ("number", Some(v)) =>
+                            return WhileOut::Iter(Box::new(lambda_number(v.parse().unwrap()))),
+                        ("func_dec_start", Some(_)) =>
+                            return WhileOut::Some(Token::new(TokenKind::FuncDecStart)),
+                        ("func_dec_end", Some(_)) =>
+                            return WhileOut::Some(Token::new(TokenKind::FuncDecEnd)),
+                        ("l_paren", Some(_)) =>
+                            return WhileOut::Some(Token::new(TokenKind::LParen)),
+                        ("r_paren", Some(_)) =>
+                            return WhileOut::Some(Token::new(TokenKind::RParen)),
+                        _ => (),
+                    }
+                }
+            }
+            panic!("Unexpected token!");
+        }));
         let next = tokens.next();
         TokenStream {
             tokens: Box::new(tokens),
