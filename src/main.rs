@@ -47,7 +47,7 @@ impl<'a> TokenStream<'a> {
             match c {
                 // split("") produces a "" at the start and end of the iterator
                 "" | " " | "\n" | "\t" => None,
-                "/" => Some(Token::new(TokenKind::FuncDecStart)),
+                "/" | "λ" => Some(Token::new(TokenKind::FuncDecStart)),
                 "." => Some(Token::new(TokenKind::FuncDecEnd)),
                 "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
                     "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
