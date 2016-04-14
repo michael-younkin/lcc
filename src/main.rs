@@ -40,20 +40,20 @@ impl<'a> Token<'a> {
 
 type LambdaParseResult<T> = Result<T, &'static str>;
 
-enum WhileOut<'a, T> {
-    Iter(Box<Iterator<Item=T> + 'a>),
+enum WhileOut<'o, T> {
+    Iter(Box<Iterator<Item=T> + 'o>),
     Some(T),
     None,
 }
-type WhileFunc<'a, T> = FnMut() -> WhileOut<'a, T>;
-struct WhileIterator<'a, T> {
-    func: Box<WhileFunc<'a, T>>,
-    curr_iter: Option<Box<Iterator<Item=T> + 'a>>,
+type WhileFunc<'o, T> = FnMut() -> WhileOut<'o, T>;
+struct WhileIterator<'i, 'o, T> where 'o: 'i {
+    func: Box<WhileFunc<'o, T>>,
+    curr_iter: Option<Box<Iterator<Item=T> + 'i>>,
     done: bool,
 }
 
-impl<'a, T> WhileIterator<'a, T> {
-    fn new(func: Box<WhileFunc<'a, T>>) -> WhileIterator<'a, T> {
+impl<'i, 'o, T> WhileIterator<'i, 'o, T> {
+    fn new(func: Box<WhileFunc<'o, T>>) -> WhileIterator<'i, 'o, T> {
         WhileIterator {
             func: func,
             done: false,
@@ -62,19 +62,19 @@ impl<'a, T> WhileIterator<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for WhileIterator<'a, T> {
+impl<'i, 'o, T> Iterator for WhileIterator<'i, 'o, T> {
     type Item = T;
     fn next(&mut self) -> Option<T> {
         if self.done {
             return None;
         }
         // See if we currently have an iterator
-        if let Some(iter) = self.curr_iter {
+        if let Some(mut iter) = self.curr_iter.take() {
             let next = iter.next();
             if next.is_some() {
+                // Put back what we took
+                self.curr_iter = Some(iter);
                 return next;
-            } else {
-                self.curr_iter = None;
             }
         }
         // Otherwise see if our generator is returning stuff
@@ -118,7 +118,7 @@ struct TokenStream<'a> {
     next: Option<Token<'a>>
 }
 
-fn lambda_number<'a>(num: u32) -> WhileIterator<'a, Token<'static>> {
+fn lambda_number<'a, 'b>(num: u32) -> WhileIterator<'a, 'b, Token<'static>> {
     let count = -1;
     let mut start = vec![
         Token::new(TokenKind::LParen),
@@ -158,10 +158,8 @@ impl<'a> TokenStream<'a> {
             if rem == "" {
                 return WhileOut::None;
             }
-            if let Some(captures) = token_regex.captures::<'a>(rem) {
-                if let Some(rest) = captures.name::<'a>("rest") {
-                    rem = rest;
-                }
+            if let Some(captures) = token_regex.captures(rem) {
+                let rem = captures.name("rest").expect("Rest should always match.");
                 for cap in captures.iter_named() {
                     match cap {
                         ("variable", Some(v)) =>
