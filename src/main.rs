@@ -52,6 +52,8 @@ impl<'a> TokenStream<'a> {
                 "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
                     "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
                     => Some(Token::with_value(TokenKind::Variable, c)),
+                "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" =>
+                    Some(Token::with_value(TokenKind::Variable, c)),
                 "(" => Some(Token::new(TokenKind::LParen)),
                 ")" => Some(Token::new(TokenKind::RParen)),
                 _ => panic!("Unexpected token!"),
@@ -70,7 +72,7 @@ impl<'a> TokenStream<'a> {
             TokenKind::FuncDecStart => "Unable to match function declaration start.",
             TokenKind::FuncDecEnd => "Unable to match function declaration end.",
             TokenKind::LParen => "Unable to match left parenthese.",
-            TokenKind::RParen => "Unable to match right parenthese."
+            TokenKind::RParen => "Unable to match right parenthese.",
         }
     }
 
