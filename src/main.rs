@@ -158,12 +158,14 @@ fn parenthesize_vec<'t>(buf: &mut String, vec: &Vec<Expr<'t>>) {
 }
 
 fn main() {
-    println!("{:?}", Expr::with_input("λab.a (b c) a λc.d").unwrap());
+    let mut buf = String::new();
+    Expr::with_input("λab.a (b c) a λc.d").unwrap().parenthesize_into(&mut buf);
+    println!("{}", buf);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{tokenize, Token};
+    use super::{tokenize, Token, Expr};
 
     fn tokens_to_string<'t>(tokens: &Vec<Token<'t>>) -> String {
         let mut iter = tokens.iter().peekable();
@@ -193,5 +195,12 @@ mod tests {
     fn mixed_long_tokens() {
         let tokens = tokens_to_string(&tokenize("     helloλa.batman c").unwrap());
         assert_eq!(tokens, "hello λ a . batman c");
+    }
+
+    #[test]
+    fn check_parentheses() {
+        let mut buf = String::new();
+        Expr::with_input("λab.a (b c) d").unwrap().parenthesize_into(&mut buf);
+        assert_eq!("(λab.(a (b c) d))", buf);
     }
 }
