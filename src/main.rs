@@ -1,6 +1,5 @@
 use std::io::{self, Read};
 use std::fmt;
-use std::fmt::{Display, Formatter};
 use std::mem;
 
 #[derive(Debug)]
@@ -160,4 +159,39 @@ fn parenthesize_vec<'t>(buf: &mut String, vec: &Vec<Expr<'t>>) {
 
 fn main() {
     println!("{:?}", Expr::with_input("λab.a (b c) a λc.d").unwrap());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{tokenize, Token};
+
+    fn tokens_to_string<'t>(tokens: &Vec<Token<'t>>) -> String {
+        let mut iter = tokens.iter().peekable();
+        let mut buf = String::new();
+        while let Some(token) = iter.next() {
+            buf.push_str(match *token {
+                Token::Var(s) => s,
+                Token::FuncStart => "λ",
+                Token::FuncDecEnd => ".",
+                Token::LParen => "(",
+                Token::RParen => ")",
+            });
+            if let Some(_) = iter.peek() {
+                buf.push(' ');
+            }
+        }
+        buf
+    }
+
+    #[test]
+    fn mixed_tokens() {
+        let tokens = tokens_to_string(&tokenize("\thλb.c").unwrap());
+        assert_eq!(tokens, "h λ b . c");
+    }
+
+    #[test]
+    fn mixed_long_tokens() {
+        let tokens = tokens_to_string(&tokenize("     helloλa.batman c").unwrap());
+        assert_eq!(tokens, "hello λ a . batman c");
+    }
 }
