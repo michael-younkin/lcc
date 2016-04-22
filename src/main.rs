@@ -39,7 +39,7 @@ fn tokenize<'t>(input: &'t str) -> Result<Vec<Token<'t>>, &'static str> {
                         break;
                     }
                 }
-                tokens.push(Token::Var(&input[i..(i + 1)]))
+                tokens.push(Token::Var(&input[start..(end + 1)]))
             },
             _ => return Err("Unexpected character encountered."),
         }
