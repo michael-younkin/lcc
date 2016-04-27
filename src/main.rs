@@ -132,35 +132,56 @@ impl<'t> Expr<'t> {
         match *self {
             Expr::Var(ref name) => buf.push_str(name),
             Expr::Func(ref arg, ref body) => {
-                buf.push_str("(λ");
+                buf.push_str("λ");
                 buf.push_str(arg);
                 buf.push('.');
                 parenthesize_vec(buf, &body);
-                buf.push(')');
             }
-            Expr::Scope(ref body) => {
-                buf.push('(');
-                parenthesize_vec(buf, &body);
-                buf.push(')');
-            }
+            Expr::Scope(ref body) => parenthesize_vec(buf, &body)
+        }
+    }
+
+    fn is_func(&self) -> bool {
+        match *self {
+            Expr::Func(_, _) => true,
+            _ => false,
         }
     }
 }
 
 fn parenthesize_vec<'t>(buf: &mut String, vec: &Vec<Expr<'t>>) {
-    for _ in 0..vec.len() {
-        buf.push('(');
+    fn parenthesize<'s>(buf: &mut String, e: &Expr<'s>) {
+        if e.is_func() {
+            buf.push('(');
+            e.parenthesize_into(buf);
+            buf.push(')');
+        } else {
+            e.parenthesize_into(buf);
+        }
     }
-    for exp in vec {
-        exp.parenthesize_into(buf);
-        buf.push(')');
+
+    if vec.len() == 1 {
+        parenthesize(buf, vec.first().expect("One element."));
+    } else {
+        // First element doesn't need "application" parentheses
+        for _ in 0..vec.len() - 1 {
+            buf.push('(');
+        }
+        parenthesize(buf, vec.first().expect("At least one element."));
+        for e in vec[1..vec.len()].iter() {
+            buf.push(' ');
+            parenthesize(buf, e);
+            buf.push(')');
+        }
     }
 }
 
 fn main() {
     let mut buf = String::new();
-    Expr::with_input("λab.a (b c) a λc.d").unwrap().parenthesize_into(&mut buf);
+    let e =  Expr::with_input("λab.a (b c) a λc.d").unwrap();
+    e.parenthesize_into(&mut buf);
     println!("{}", buf);
+    println!("{:?}", e);
 }
 
 #[cfg(test)]
