@@ -222,6 +222,6 @@ mod tests {
     fn check_parentheses() {
         let mut buf = String::new();
         Expr::with_input("λab.a (b c) d").unwrap().parenthesize_into(&mut buf);
-        assert_eq!("(λab.(a (b c) d))", buf);
+        assert_eq!("(λab.((a (b c)) d))", buf);
     }
 }
