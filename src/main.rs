@@ -1,6 +1,7 @@
 use std::io::{self, Read};
 use std::fmt;
 use std::mem;
+use std::borrow::Cow;
 
 #[derive(Debug)]
 enum Token<'t> {
@@ -67,7 +68,7 @@ macro_rules! consume_value {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Expr<'t> {
     Var(&'t str),
     Func(&'t str, Vec<Expr<'t>>),
@@ -147,6 +148,31 @@ impl<'t> Expr<'t> {
             _ => false,
         }
     }
+
+    fn eval_once(&self) -> Cow<Expr<'t>> {
+        match *self {
+            Expr::Var(_) => Cow::Borrowed(self),
+            Expr::Func(ref arg, ref body) => {
+                match eval_vec(body) {
+                    Cow::Borrowed(_) => Cow::Borrowed(self),
+                    Cow::Owned(new_body) => Cow::Owned(Expr::Func(arg, new_body)),
+                }
+            },
+            Expr::Scope(ref body) =>
+                match eval_vec(body) {
+                    Cow::Borrowed(_) => Cow::Borrowed(self),
+                    Cow::Owned(mut new_body) => {
+                        if new_body.len() > 1 {
+                            Cow::Owned(Expr::Scope(new_body))
+                        } else {
+                            // if we simplified to a single result, just return that instead of a
+                            // scope
+                            Cow::Owned(new_body.remove(0))
+                        }
+                    },
+                },
+        }
+    }
 }
 
 fn parenthesize_vec<'t>(buf: &mut String, vec: &Vec<Expr<'t>>) {
@@ -174,6 +200,56 @@ fn parenthesize_vec<'t>(buf: &mut String, vec: &Vec<Expr<'t>>) {
             buf.push(')');
         }
     }
+}
+
+fn replace_in_vec<'t>(input: &Vec<Expr<'t>>, i: usize, new_v: Expr<'t>) -> Vec<Expr<'t>> {
+    let new_vec = input.clone();
+    new_vec.remove(i);
+    new_vec.insert(i, new_v);
+    new_vec
+}
+
+fn eval_vec<'a, 't>(input: &'a Vec<Expr<'t>>) -> Cow<'a, Vec<Expr<'t>>> {
+    // First look for something within our vec that we could eval
+    for (i, expr) in input.enumerate() {
+        match *expr {
+            // If we need to replace something, make a copy of the original vec, replace the
+            // value, and return the new vec.
+            Expr::Scope(ref body) => match eval_vec(body) {
+                Cow::Owned(new_body) => {
+                    return Cow::Owned(replace_in_vec(input, i, Expr::Scope(new_body)))
+                },
+                _ => continue
+            },
+            Expr::Func(arg, ref body) => match eval_vec(body) {
+                Cow::Owned(new_body) => {
+                    return Cow::Owned(replace_in_vec(input, i, Expr::Func(arg, new_body)))
+                },
+                _ => continue
+            },
+            _ => continue
+        }
+    }
+
+    // If we haven't returned yet, then we should try to apply something in this vec. The only time
+    // we can apply is if the first element is a function.
+    match (input.get(0), input.get(1)) {
+        (Some(Expr::Func(arg, body)), Some(exp)) => {
+            let new_expr = substitute(body, arg, exp);
+            let new_vec = input.clone();
+            // Panics if there are not two elements in the vec
+            new_vec.remove(0);
+            new_vec.remove(0);
+            new_vec.insert(0, new_expr);
+            return Cow::Owned(new_vec)
+        },
+        _ => (),
+    }
+    Cow::Borrowed(input)
+}
+
+fn substitute<'t>(body: &Vec<Expr<'t>>, arg: &'t str, new_value: &Expr<'t>) -> Expr<'t> {
+
 }
 
 fn main() {
