@@ -203,7 +203,7 @@ fn parenthesize_vec<'t>(buf: &mut String, vec: &Vec<Expr<'t>>) {
 }
 
 fn replace_in_vec<'t>(input: &Vec<Expr<'t>>, i: usize, new_v: Expr<'t>) -> Vec<Expr<'t>> {
-    let new_vec = input.clone();
+    let mut new_vec = input.clone();
     new_vec.remove(i);
     new_vec.insert(i, new_v);
     new_vec
@@ -211,7 +211,7 @@ fn replace_in_vec<'t>(input: &Vec<Expr<'t>>, i: usize, new_v: Expr<'t>) -> Vec<E
 
 fn eval_vec<'a, 't>(input: &'a Vec<Expr<'t>>) -> Cow<'a, Vec<Expr<'t>>> {
     // First look for something within our vec that we could eval
-    for (i, expr) in input.enumerate() {
+    for (i, expr) in input.iter().enumerate() {
         match *expr {
             // If we need to replace something, make a copy of the original vec, replace the
             // value, and return the new vec.
@@ -234,9 +234,14 @@ fn eval_vec<'a, 't>(input: &'a Vec<Expr<'t>>) -> Cow<'a, Vec<Expr<'t>>> {
     // If we haven't returned yet, then we should try to apply something in this vec. The only time
     // we can apply is if the first element is a function.
     match (input.get(0), input.get(1)) {
-        (Some(Expr::Func(arg, body)), Some(exp)) => {
-            let new_expr = substitute(body, arg, exp);
-            let new_vec = input.clone();
+        (Some(&Expr::Func(arg, ref body)), Some(exp)) => {
+            let mut new_body = substitute(body, arg, exp);
+            let new_expr = if new_body.len() == 1 {
+                new_body.remove(0)
+            } else {
+                Expr::Scope(new_body)
+            };
+            let mut new_vec = input.clone();
             // Panics if there are not two elements in the vec
             new_vec.remove(0);
             new_vec.remove(0);
@@ -248,16 +253,25 @@ fn eval_vec<'a, 't>(input: &'a Vec<Expr<'t>>) -> Cow<'a, Vec<Expr<'t>>> {
     Cow::Borrowed(input)
 }
 
-fn substitute<'t>(body: &Vec<Expr<'t>>, arg: &'t str, new_value: &Expr<'t>) -> Expr<'t> {
-
+fn substitute<'t>(body: &Vec<Expr<'t>>, param: &'t str, new_value: &Expr<'t>) -> Vec<Expr<'t>> {
+    let new_body: Vec<_> = body.iter().map(|expr| {
+        let v = match *expr {
+            Expr::Var(name) if name == param => new_value,
+            _ => expr
+        };
+        v.clone()
+    }).collect();
+    new_body
 }
 
 fn main() {
     let mut buf = String::new();
-    let e =  Expr::with_input("λab.a (b c) a λc.d").unwrap();
+    let e =  Expr::with_input("(λa.a) (λb.b) (λc.c)").unwrap();
     e.parenthesize_into(&mut buf);
     println!("{}", buf);
     println!("{:?}", e);
+    let next = e.eval_once();
+    println!("{:?}", next);
 }
 
 #[cfg(test)]
