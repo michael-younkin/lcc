@@ -314,4 +314,11 @@ mod tests {
         Expr::with_input("λab.a (b c) d").unwrap().parenthesize_into(&mut buf);
         assert_eq!("(λab.((a (b c)) d))", buf);
     }
+
+    #[test]
+    fn check_eval_once() {
+        let mut buf = String::new();
+        Expr::with_input("(λa.a) (λb.b)").unwrap().eval_once().parenthesize_into(&mut buf);
+        assert_eq!("(λb.b)", buf);
+    }
 }
