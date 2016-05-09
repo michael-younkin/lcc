@@ -34,9 +34,9 @@ impl<'a> Token<'a> {
     }
 }
 
-type LambdaParseResult<T> = Result<T, &'static str>;
+pub type LambdaParseResult<T> = Result<T, &'static str>;
 
-struct TokenStream<'a> {
+pub struct TokenStream<'a> {
     tokens: Box<Iterator<Item=Token<'a>> + 'a>,
     next: Option<Token<'a>>
 }
@@ -124,7 +124,7 @@ impl<'a> TokenStream<'a> {
 // Parens -> ( App )
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum LambdaExp<'a> {
+pub enum LambdaExp<'a> {
     App(Rc<LambdaExp<'a>>, Rc<LambdaExp<'a>>),
     Func(Rc<LambdaExp<'a>>, Rc<LambdaExp<'a>>),
     Var(&'a str),
@@ -169,7 +169,7 @@ impl<'a> Display for LambdaExp<'a> {
     }
 }
 
-fn parse_app<'a>(tokens: &mut TokenStream<'a>) -> LambdaParseResult<LambdaExp<'a>> {
+pub fn parse_app<'a>(tokens: &mut TokenStream<'a>) -> LambdaParseResult<LambdaExp<'a>> {
     let mut current_value = try!(parse_var(tokens));
     let mut next_value = try!(parse_var(tokens));
     while next_value != LambdaExp::None {
@@ -260,7 +260,7 @@ fn simplify_once<'a>(root_exp: Rc<LambdaExp<'a>>) -> Rc<LambdaExp<'a>> {
     }
 }
 
-fn simplify<'a>(root_exp: Rc<LambdaExp<'a>>) -> Vec<Rc<LambdaExp<'a>>> {
+pub fn simplify<'a>(root_exp: Rc<LambdaExp<'a>>) -> Vec<Rc<LambdaExp<'a>>> {
     let mut steps = vec![root_exp.clone()];
     let mut prev_step = root_exp.clone();
     let mut next_step = simplify_once(root_exp);
@@ -288,5 +288,28 @@ fn main() {
     let steps = simplify(lambda_exp);
     for (i, step) in steps.iter().enumerate() {
         println!("Step {}: {}", i + 1, step);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::rc::Rc;
+
+    use super::simplify;
+    use super::TokenStream;
+    use super::parse_app;
+
+    #[test]
+    fn irreducible_parse() {
+        let s = "λx.x y";
+        let mut tokens = TokenStream::new(s);
+        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
+        if tokens.has_next() {
+            panic!("Extra tokens.");
+        }
+
+        let steps = simplify(lambda_exp);
+        assert_eq!(steps.len(), 1);
     }
 }
