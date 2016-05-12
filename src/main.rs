@@ -327,6 +327,19 @@ mod tests {
     }
 
     #[test]
+    fn inner_infinite_loop() {
+        let s = "(λx.x x) (λx.x x) (λx.x x)";
+        let mut tokens = TokenStream::new(s);
+        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
+        if tokens.has_next() {
+            panic!("Extra tokens.");
+        }
+
+        let steps = simplify(lambda_exp);
+        assert_eq!(steps.len(), 1);
+    }
+
+    #[test]
     fn lambda_chars() {
         let s = "λx.x /y.y λz.z";
         let mut tokens = TokenStream::new(s);
