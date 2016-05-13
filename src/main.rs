@@ -351,4 +351,17 @@ mod tests {
         let steps = simplify(lambda_exp);
         assert_eq!(steps.len(), 3);
     }
+
+    #[test]
+    fn number_var() {
+        let s = "λx.1";
+        let mut tokens = TokenStream::new(s);
+        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
+        if tokens.has_next() {
+            panic!("Extra tokens.");
+        }
+
+        let steps = simplify(lambda_exp);
+        assert_eq!(steps.len(), 1);
+    }
 }
