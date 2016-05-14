@@ -291,6 +291,39 @@ fn main() {
     }
 }
 
+pub type LambdaExpResult<T> = Result<T, &'static str>;
+
+#[derive(PartialEq, Eq, Clone)]
+pub enum LE<'s> {
+    Var(&'s str),
+    App(Box<LE<'s>>, Box<LE<'s>>),
+    Func(&'s str, Box<LE<'s>>),
+}
+
+impl<'s> LE<'s> {
+    pub fn new(exp: &'s str) -> LambdaExpResult<LE<'s>> {
+        LE::parse(exp)
+    }
+
+    fn parse(s: &'s str) -> LambdaExpResult<LE<'s>> {
+        Err("Parser not implemented.")
+    }
+
+    pub fn reduce(&self) -> LambdaExpResult<Vec<LE<'s>>> {
+        let mut steps = vec![self.to_owned()];
+        let mut current = self.simplify_once();
+        while &current != steps.last().expect("At least one element in the vec.") {
+            steps.push(current);
+            current = self.simplify_once();
+        }
+        Ok(steps)
+    }
+
+    fn reduce_once(&self) -> LE<'s> {
+        self.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
