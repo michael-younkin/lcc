@@ -293,7 +293,7 @@ fn main() {
 
 pub type LambdaExpResult<T> = Result<T, &'static str>;
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum LE<'s> {
     Var(&'s str),
     App(Box<LE<'s>>, Box<LE<'s>>),
@@ -311,16 +311,26 @@ impl<'s> LE<'s> {
 
     pub fn reduce(&self) -> LambdaExpResult<Vec<LE<'s>>> {
         let mut steps = vec![self.to_owned()];
-        let mut current = self.simplify_once();
+        let mut current = self.reduce_once();
         while &current != steps.last().expect("At least one element in the vec.") {
             steps.push(current);
-            current = self.simplify_once();
+            current = self.reduce_once();
         }
         Ok(steps)
     }
 
     fn reduce_once(&self) -> LE<'s> {
         self.to_owned()
+    }
+}
+
+impl<'s> fmt::Display for LE<'s> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LE::Var(s) => write!(f, "{}", s),
+            LE::App(ref left, ref right) => write!(f, "({} {})", left, right),
+            LE::Func(arg, ref body) => write!(f, "(λ{}.{})", arg, body),
+        }
     }
 }
 
