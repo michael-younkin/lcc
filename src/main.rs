@@ -291,6 +291,15 @@ fn main() {
     }
 }
 
+enum LEToken<'s> {
+    Var(&'s str),
+    FuncStart,
+    FuncParamEnd,
+    LParen,
+    RParen,
+    Err,
+}
+
 pub type LambdaExpResult<T> = Result<T, &'static str>;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -306,7 +315,25 @@ impl<'s> LE<'s> {
     }
 
     fn parse(s: &'s str) -> LambdaExpResult<LE<'s>> {
-        Err("Parser not implemented.")
+        // Tokenize
+        let mut tokens = s.split("").filter_map(|c| {
+            match c {
+                // Skip whitespace; split("") produces a "" at the start and end of the iterator
+                "" | " " | "\n" | "\t" => None,
+                // Support several different function start chars
+                "/" | "\\" | "λ" => Some(LEToken::FuncStart),
+                "." => Some(LEToken::FuncParamEnd),
+                "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
+                    "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" |
+                "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" =>
+                    Some(LEToken::Var(c)),
+                "(" => Some(LEToken::LParen),
+                ")" => Some(LEToken::RParen),
+                // Everything else is an error
+                _ => Some(LEToken::Err),
+            }
+        });
+        Err("Incomplete")
     }
 
     pub fn reduce(&self) -> LambdaExpResult<Vec<LE<'s>>> {
