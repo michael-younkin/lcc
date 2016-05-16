@@ -277,21 +277,11 @@ fn main() {
     let mut buf = String::new();
     io::stdin().read_to_string(&mut buf).unwrap();
 
-    let mut tokens = TokenStream::new(&buf);
-    let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
-    if tokens.has_next() {
-        panic!("Extra tokens.");
-    }
-
-    println!("Parsed expression: {}", lambda_exp);
-    println!("Parenthesized: {}", &lambda_exp.parenthesize());
-    println!("Simplification steps:");
-    let steps = simplify(lambda_exp);
-    for (i, step) in steps.iter().enumerate() {
-        println!("Step {}: {}", i + 1, step);
-    }
+    let tokens = LE::tokenize(&buf);
+    println!("{:?}", tokens);
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum LEToken<'s> {
     Var(&'s str),
     FuncStart,
@@ -348,6 +338,8 @@ impl<'s> LE<'s> {
             while let Some(&(_, c)) = iter.peek() {
                 if predicate(c) {
                     iter.next();
+                } else {
+                    break;
                 }
             }
             // I'm not sure whether or not string indices when you index into a string
@@ -362,6 +354,7 @@ impl<'s> LE<'s> {
         let mut tokens = Vec::new();
         let mut iter = s.char_indices().peekable();
         while let Some((i, c)) = iter.next() {
+            println!("next!");
             match c {
                 ' ' | '\t' | '\n' => (),
                 '(' => tokens.push(LEToken::LParen),
@@ -417,74 +410,34 @@ impl<'s> fmt::Display for LE<'s> {
 #[cfg(test)]
 mod tests {
 
-    use std::rc::Rc;
-
-    use super::simplify;
-    use super::TokenStream;
-    use super::parse_app;
+    use super::LEToken;
+    use super::LE;
 
     #[test]
-    fn irreducible_parse() {
-        let s = "λx.x y";
-        let mut tokens = TokenStream::new(s);
-        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
-        if tokens.has_next() {
-            panic!("Extra tokens.");
-        }
-
-        let steps = simplify(lambda_exp);
-        assert_eq!(steps.len(), 1);
-    }
-
-    #[test]
-    fn infinite_loop() {
-        let s = "(λx.x x) (λx.x x)";
-        let mut tokens = TokenStream::new(s);
-        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
-        if tokens.has_next() {
-            panic!("Extra tokens.");
-        }
-
-        let steps = simplify(lambda_exp);
-        assert_eq!(steps.len(), 1);
-    }
-
-    #[test]
-    fn inner_infinite_loop() {
-        let s = "(λx.x x) (λx.x x) (λx.x x)";
-        let mut tokens = TokenStream::new(s);
-        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
-        if tokens.has_next() {
-            panic!("Extra tokens.");
-        }
-
-        let steps = simplify(lambda_exp);
-        assert_eq!(steps.len(), 1);
-    }
-
-    #[test]
-    fn lambda_chars() {
-        let s = "λx.x /y.y λz.z";
-        let mut tokens = TokenStream::new(s);
-        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
-        if tokens.has_next() {
-            panic!("Extra tokens.");
-        }
-
-        let steps = simplify(lambda_exp);
-        assert_eq!(steps.len(), 3);
-    }
-
-    #[test]
-    fn number_var() {
-        let s = "λx.1";
-        let mut tokens = TokenStream::new(s);
-        let lambda_exp = Rc::new(parse_app(&mut tokens).unwrap());
-        if tokens.has_next() {
-            panic!("Extra tokens.");
-        }
-
-        let steps = simplify(lambda_exp);
-        assert_eq!(steps.len(), 1);
+    fn tokenize_1() {
+        assert_eq!(
+            vec![
+                LEToken::FuncStart,
+                LEToken::Var("a"),
+                LEToken::FuncParamEnd,
+                LEToken::Var("b"),
+                LEToken::Var("c"),
+                LEToken::LParen,
+                LEToken::FuncStart,
+                LEToken::Var("apple"),
+                LEToken::FuncParamEnd,
+                LEToken::Var("123"),
+                LEToken::Var("a234"),
+                LEToken::Var("432"),
+                LEToken::RParen,
+                LEToken::LParen,
+                LEToken::RParen,
+                LEToken::FuncStart,
+                LEToken::Var("x"),
+                LEToken::FuncParamEnd,
+                LEToken::Var("x"),
+            ],
+            LE::tokenize("/a.b c (λapple.123 a234 432) () \t\n\\x.x")
+        );
     }
 }
