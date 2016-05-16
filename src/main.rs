@@ -2,6 +2,7 @@ use std::io::{self, Read};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
+use std::iter::Peekable;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TokenKind {
@@ -314,25 +315,77 @@ impl<'s> LE<'s> {
         LE::parse(exp)
     }
 
+    fn tokenize(s: &'s str) -> Vec<LEToken<'s>> {
+        fn is_word(c: char) -> bool {
+            match c {
+                'a'...'z'
+                    | 'A'...'Z'
+                    | '0'...'9'
+                    | '_' => true,
+                _ => false,
+            }
+        }
+
+        fn is_word_start(c: char) -> bool {
+            match c {
+                'a'...'z'
+                    | 'A'...'Z'
+                    | '_' => true,
+                _ => false,
+            }
+        }
+
+        fn is_number(c: char) -> bool {
+            match c {
+                '0'...'9' => true,
+                _ => false,
+            }
+        }
+
+        fn read_while<F, I>(predicate: F, iter: &mut Peekable<I>, s: &str) -> usize
+                where F: Fn(char) -> bool, I: Iterator<Item=(usize, char)> {
+            // Consume all word characters
+            while let Some(&(_, c)) = iter.peek() {
+                if predicate(c) {
+                    iter.next();
+                }
+            }
+            // I'm not sure whether or not string indices when you index into a string
+            // are code point indices or byte indices (I'll have to check this at some
+            // point). This code should work in either situation.
+            match iter.peek() {
+                Some(&(i, _)) => i - 1,
+                None => s.len() - 1
+            }
+        }
+
+        let mut tokens = Vec::new();
+        let mut iter = s.char_indices().peekable();
+        while let Some((i, c)) = iter.next() {
+            match c {
+                ' ' | '\t' | '\n' => (),
+                '(' => tokens.push(LEToken::LParen),
+                ')' => tokens.push(LEToken::RParen),
+                'λ' | '/' | '\\' => tokens.push(LEToken::FuncStart),
+                '.' => tokens.push(LEToken::FuncParamEnd),
+                // Read a variable
+                _ if is_word_start(c) => {
+                    let end = read_while(is_word, &mut iter, s);
+                    tokens.push(LEToken::Var(&s[i..end + 1]))
+                },
+                _ if is_number(c) => {
+                    let end = read_while(is_number, &mut iter, s);
+                    tokens.push(LEToken::Var(&s[i..end + 1]))
+                },
+                _ => tokens.push(LEToken::Err),
+            }
+        }
+        tokens
+    }
+
     fn parse(s: &'s str) -> LambdaExpResult<LE<'s>> {
         // Tokenize
-        let mut tokens = s.split("").filter_map(|c| {
-            match c {
-                // Skip whitespace; split("") produces a "" at the start and end of the iterator
-                "" | " " | "\n" | "\t" => None,
-                // Support several different function start chars
-                "/" | "\\" | "λ" => Some(LEToken::FuncStart),
-                "." => Some(LEToken::FuncParamEnd),
-                "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
-                    "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" |
-                "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" =>
-                    Some(LEToken::Var(c)),
-                "(" => Some(LEToken::LParen),
-                ")" => Some(LEToken::RParen),
-                // Everything else is an error
-                _ => Some(LEToken::Err),
-            }
-        });
+        let mut tokens = LE::tokenize(s);
         Err("Incomplete")
     }
 
