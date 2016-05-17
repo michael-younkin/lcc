@@ -379,7 +379,67 @@ impl<'s> LE<'s> {
     fn parse(s: &'s str) -> LambdaExpResult<LE<'s>> {
         // Tokenize
         let mut tokens = LE::tokenize(s);
-        Err("Incomplete")
+
+        fn parse_app<'s, T: Iterator<Item=LEToken<'s>>>(tokens: &mut Peekable<T>)
+                -> LambdaExpResult<LE<'s>> {
+            let mut left = try!(parse_var(tokens));
+            loop {
+                match tokens.peek() {
+                    None | Some(&LEToken::RParen) => return Ok(left),
+                    _ => {
+                        let right = try!(parse_var(tokens));
+                        left = LE::App(Box::new(left), Box::new(right));
+                    },
+                }
+            }
+        }
+
+        fn parse_var<'s, T: Iterator<Item=LEToken<'s>>>(tokens: &mut Peekable<T>)
+                 -> LambdaExpResult<LE<'s>> {
+            if let Some(&LEToken::Var(s)) = tokens.peek() {
+                tokens.next();
+                Ok(LE::Var(s))
+            } else {
+                parse_func(tokens)
+            }
+         }
+
+        fn parse_func<'s, T: Iterator<Item=LEToken<'s>>>(tokens: &mut Peekable<T>)
+                 -> LambdaExpResult<LE<'s>> {
+            match tokens.peek() {
+                Some(&LEToken::FuncStart) => {tokens.next();},
+                _ => return parse_parens(tokens),
+            }
+
+            let arg = match tokens.next() {
+                Some(LEToken::Var(arg)) => arg,
+                _ => return Err("Expected function argument."),
+            };
+
+            match tokens.next() {
+                Some(LEToken::FuncParamEnd) => (),
+                _ => return Err("Expected function param end."),
+            }
+
+            let body = try!(parse_app(tokens));
+            Ok(LE::Func(arg, Box::new(body)))
+        }
+
+        fn parse_parens<'s, T: Iterator<Item=LEToken<'s>>>(tokens: &mut Peekable<T>)
+                -> LambdaExpResult<LE<'s>> {
+            match tokens.next() {
+                Some(LEToken::LParen) => (),
+                _ => return Err("Expected LParen"),
+            }
+            let body = try!(parse_app(tokens));
+            match tokens.next() {
+                Some(LEToken::RParen) => (),
+                _ => return Err("Expected RParen"),
+            }
+            Ok(body)
+        }
+
+        parse_app(&mut tokens.into_iter().peekable())
     }
 
     pub fn reduce(&self) -> LambdaExpResult<Vec<LE<'s>>> {
