@@ -500,4 +500,18 @@ mod tests {
             LE::tokenize("/a.b c (λapple.123 a234 432) () \t\n\\x.x")
         );
     }
+
+    #[test]
+    fn tokenize_2() {
+        assert_eq!(
+            vec![
+            LEToken::FuncStart,
+            LEToken::Var("123"),
+            LEToken::FuncParamEnd,
+            LEToken::Var("123"),
+            LEToken::Var("123"),
+            ],
+            LE::tokenize("/123.123 123")
+        );
+    }
 }
