@@ -354,7 +354,6 @@ impl<'s> LE<'s> {
         let mut tokens = Vec::new();
         let mut iter = s.char_indices().peekable();
         while let Some((i, c)) = iter.next() {
-            println!("next!");
             match c {
                 ' ' | '\t' | '\n' => (),
                 '(' => tokens.push(LEToken::LParen),
