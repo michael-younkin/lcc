@@ -513,4 +513,90 @@ mod tests {
             LE::tokenize("/123.123 123")
         );
     }
+
+    #[test]
+    fn parse_app_parens() {
+        assert_eq!(
+            LE::App(
+                Box::new(LE::App(
+                    Box::new(LE::Var("a")),
+                    Box::new(LE::Var("b"))
+                )),
+                Box::new(LE::Var("c"))
+            ),
+            LE::parse("(a b c)").unwrap()
+        );
+    }
+
+    #[test]
+    fn parse_func() {
+        assert_eq!(
+            LE::Func(
+                "x",
+                Box::new(LE::Var("x"))
+            ),
+            LE::parse("λx.x").unwrap()
+        );
+    }
+
+    #[test]
+    fn parse_func_app_func() {
+        assert_eq!(
+            LE::App(
+                Box::new(LE::Func(
+                        "x",
+                        Box::new(LE::Var("x"))
+                )),
+                Box::new(LE::Func(
+                        "y",
+                        Box::new(LE::Var("y"))
+                ))
+            ),
+            LE::parse("(λx.x) λy.y").unwrap()
+        );
+    }
+
+    #[test]
+    fn parse_func_within_func() {
+        assert_eq!(
+            LE::Func(
+                "x",
+                Box::new(LE::Func(
+                        "y",
+                        Box::new(LE::Var("z"))
+                ))
+            ),
+            LE::parse("(λx.λy.z)").unwrap()
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn func_char() {
+        LE::parse("λ").unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn lparen() {
+        LE::parse("(").unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn rparen() {
+        LE::parse(")").unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn param_end_char() {
+        LE::parse(".").unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn app_fun_char() {
+        LE::parse("a b c λ").unwrap();
+    }
 }
