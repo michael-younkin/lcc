@@ -277,8 +277,8 @@ fn main() {
     let mut buf = String::new();
     io::stdin().read_to_string(&mut buf).unwrap();
 
-    let tokens = LE::tokenize(&buf);
-    println!("{:?}", tokens);
+    let expr = LE::new(&buf);
+    println!("{:?}", expr);
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -377,7 +377,7 @@ impl<'s> LE<'s> {
 
     fn parse(s: &'s str) -> LambdaExpResult<LE<'s>> {
         // Tokenize
-        let mut tokens = LE::tokenize(s);
+        let tokens = LE::tokenize(s);
 
         fn parse_app<'s, T: Iterator<Item=LEToken<'s>>>(tokens: &mut Peekable<T>)
                 -> LambdaExpResult<LE<'s>> {
