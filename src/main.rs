@@ -451,6 +451,25 @@ impl<'s> LE<'s> {
         Ok(steps)
     }
 
+    fn substitute(&self, target: &str, repl: &LE<'s>) -> LE<'s> {
+        match *self {
+            // If the var matches, replace it
+            LE::Var(var) if var == target => repl.to_owned(),
+            // Otherwise return the original var
+            LE::Var(_) => self.to_owned(),
+            // Make sure to substitute on both the left and the right
+            LE::App(ref left, ref right) =>
+                LE::App(
+                    Box::new(left.substitute(target, repl)),
+                    Box::new(right.substitute(target, repl)),
+                ),
+            // If the arg was renamed, don't substitute with in the func
+            LE::Func(arg, _) if arg == target => self.to_owned(),
+            // Otherwise do
+            LE::Func(arg, ref body) => LE::Func(arg, Box::new(body.substitute(target, repl))),
+        }
+    }
+
     fn reduce_once(&self) -> LE<'s> {
         self.to_owned()
     }
