@@ -485,6 +485,30 @@ impl<'s> fmt::Display for LE<'s> {
     }
 }
 
+#[test]
+fn substitute_var() {
+    assert_eq!(
+        LE::Var("b"),
+        LE::Var("a").substitute("a", &LE::Var("b"))
+    )
+}
+
+#[test]
+fn substitute_func() {
+    assert_eq!(
+        LE::Func("arg", Box::new(LE::Var("b"))),
+        LE::Func("arg", Box::new(LE::Var("a"))).substitute("a", &LE::Var("b"))
+    )
+}
+
+#[test]
+fn substitute_rename() {
+    assert_eq!(
+        LE::Func("arg", Box::new(LE::Var("arg"))),
+        LE::Func("arg", Box::new(LE::Var("arg"))).substitute("arg", &LE::Var("b"))
+    )
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -618,4 +642,5 @@ mod tests {
     fn app_fun_char() {
         LE::parse("a b c λ").unwrap();
     }
+
 }
