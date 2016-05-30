@@ -3,6 +3,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use std::iter::Peekable;
+use std::collections::HashSet;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TokenKind {
@@ -473,6 +474,26 @@ impl<'s> LE<'s> {
     fn reduce_once(&self) -> LE<'s> {
         self.to_owned()
     }
+
+    pub fn bound_vars(&self) -> HashSet<&'s str> {
+        let mut out = HashSet::new();
+        self.bound_vars_into(&mut out);
+        out
+    }
+
+    fn bound_vars_into(&self, out: &mut HashSet<&'s str>) {
+        match *self {
+            LE::Func(arg, ref body) => {
+                out.insert(arg);
+                body.bound_vars_into(out);
+            },
+            LE::App(ref left, ref right) => {
+                left.bound_vars_into(out);
+                right.bound_vars_into(out);
+            },
+            _ => ()
+        }
+    }
 }
 
 impl<'s> fmt::Display for LE<'s> {
@@ -527,6 +548,7 @@ fn substitute_complex() {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
 
     use super::LEToken;
     use super::LE;
@@ -659,4 +681,13 @@ mod tests {
         LE::parse("a b c λ").unwrap();
     }
 
+    #[test]
+    fn basic_bound_vars() {
+        let mut set = HashSet::new();
+        set.extend(vec!["a","b"]);
+        assert_eq!(
+                   set,
+                   LE::Func("a", Box::new(LE::Func("b", Box::new(LE::Var("c"))))).bound_vars()
+        )
+    }
 }
