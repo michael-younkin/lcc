@@ -509,6 +509,13 @@ fn substitute_rename() {
     )
 }
 
+fn substitute_app() {
+    assert_eq!(
+        LE::App(Box::new(LE::Var("a")), Box::new(LE::Var("a"))),
+        LE::App(Box::new(LE::Var("b")), Box::new(LE::Var("b"))).substitute("b", &LE::Var("a"))
+    )
+}
+
 #[cfg(test)]
 mod tests {
 
