@@ -517,6 +517,14 @@ fn substitute_app() {
     )
 }
 
+#[test]
+fn substitute_complex() {
+    assert_eq!(
+        LE::App(Box::new(LE::Var("a")), Box::new(LE::Func("b", Box::new(LE::Var("a"))))),
+        LE::App(Box::new(LE::Var("c")), Box::new(LE::Func("b", Box::new(LE::Var("c"))))).substitute("c", &LE::Var("a"))
+    )
+}
+
 #[cfg(test)]
 mod tests {
 
