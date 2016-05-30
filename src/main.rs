@@ -509,6 +509,7 @@ fn substitute_rename() {
     )
 }
 
+#[test]
 fn substitute_app() {
     assert_eq!(
         LE::App(Box::new(LE::Var("a")), Box::new(LE::Var("a"))),
