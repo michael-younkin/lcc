@@ -283,7 +283,7 @@ fn main() {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-enum LEToken<'s> {
+pub enum LEToken<'s> {
     Var(&'s str),
     FuncStart,
     FuncParamEnd,
@@ -506,52 +506,11 @@ impl<'s> fmt::Display for LE<'s> {
     }
 }
 
-#[test]
-fn substitute_var() {
-    assert_eq!(
-        LE::Var("b"),
-        LE::Var("a").substitute("a", &LE::Var("b"))
-    )
-}
-
-#[test]
-fn substitute_func() {
-    assert_eq!(
-        LE::Func("arg", Box::new(LE::Var("b"))),
-        LE::Func("arg", Box::new(LE::Var("a"))).substitute("a", &LE::Var("b"))
-    )
-}
-
-#[test]
-fn substitute_rename() {
-    assert_eq!(
-        LE::Func("arg", Box::new(LE::Var("arg"))),
-        LE::Func("arg", Box::new(LE::Var("arg"))).substitute("arg", &LE::Var("b"))
-    )
-}
-
-#[test]
-fn substitute_app() {
-    assert_eq!(
-        LE::App(Box::new(LE::Var("a")), Box::new(LE::Var("a"))),
-        LE::App(Box::new(LE::Var("b")), Box::new(LE::Var("b"))).substitute("b", &LE::Var("a"))
-    )
-}
-
-#[test]
-fn substitute_complex() {
-    assert_eq!(
-        LE::App(Box::new(LE::Var("a")), Box::new(LE::Func("b", Box::new(LE::Var("a"))))),
-        LE::App(Box::new(LE::Var("c")), Box::new(LE::Func("b", Box::new(LE::Var("c"))))).substitute("c", &LE::Var("a"))
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use super::LEToken;
-    use super::LE;
+    use super::*;
 
     #[test]
     fn tokenize_1() {
@@ -688,6 +647,46 @@ mod tests {
         assert_eq!(
                    set,
                    LE::Func("a", Box::new(LE::Func("b", Box::new(LE::Var("c"))))).bound_vars()
+        )
+    }
+
+    #[test]
+    fn substitute_var() {
+        assert_eq!(
+            LE::Var("b"),
+            LE::Var("a").substitute("a", &LE::Var("b"))
+        )
+    }
+
+    #[test]
+    fn substitute_func() {
+        assert_eq!(
+            LE::Func("arg", Box::new(LE::Var("b"))),
+            LE::Func("arg", Box::new(LE::Var("a"))).substitute("a", &LE::Var("b"))
+        )
+    }
+
+    #[test]
+    fn substitute_rename() {
+        assert_eq!(
+            LE::Func("arg", Box::new(LE::Var("arg"))),
+            LE::Func("arg", Box::new(LE::Var("arg"))).substitute("arg", &LE::Var("b"))
+        )
+    }
+
+    #[test]
+    fn substitute_app() {
+        assert_eq!(
+            LE::App(Box::new(LE::Var("a")), Box::new(LE::Var("a"))),
+            LE::App(Box::new(LE::Var("b")), Box::new(LE::Var("b"))).substitute("b", &LE::Var("a"))
+        )
+    }
+
+    #[test]
+    fn substitute_complex() {
+        assert_eq!(
+            LE::App(Box::new(LE::Var("a")), Box::new(LE::Func("b", Box::new(LE::Var("a"))))),
+            LE::App(Box::new(LE::Var("c")), Box::new(LE::Func("b", Box::new(LE::Var("c"))))).substitute("c", &LE::Var("a"))
         )
     }
 }
